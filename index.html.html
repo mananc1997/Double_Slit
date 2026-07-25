@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Double-Slit Interference — 3D Ripple Chamber</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root{
+    --bg:#070a12;
+    --panel:rgba(15,20,34,0.72);
+    --panel-border:rgba(120,160,220,0.18);
+    --text:#c7d0e0;
+    --text-dim:#6c7791;
+    --crest:#5fe3ff;
+    --trough:#8b5cf6;
+    --amber:#ffb020;
+    --line:rgba(140,170,220,0.14);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%; overflow:hidden;
+    background:var(--bg);
+    font-family:'Space Grotesk',sans-serif;
+    color:var(--text);
+  }
+  #container{position:fixed; inset:0;}
+  #container canvas{display:block; cursor:grab;}
+  #container canvas:active{cursor:grabbing;}
+
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  #hud{
+    position:fixed; top:22px; left:22px;
+    max-width:280px;
+    z-index:5;
+  }
+  #hud h1{
+    font-size:15px; font-weight:700; letter-spacing:0.06em;
+    text-transform:uppercase; color:#eaf2ff;
+  }
+  #hud .sub{
+    font-size:11px; color:var(--text-dim); margin-top:4px;
+    font-family:'JetBrains Mono',monospace; letter-spacing:0.02em;
+    line-height:1.5;
+  }
+
+  #panel{
+    position:fixed; bottom:22px; left:22px;
+    width:300px;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    backdrop-filter:blur(14px);
+    padding:16px 18px 14px;
+    z-index:5;
+  }
+  .row{margin-bottom:12px;}
+  .row:last-child{margin-bottom:0;}
+  .row .label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--text-dim); margin-bottom:6px;
+  }
+  .row .label span.val{
+    color:var(--crest); font-family:'JetBrains Mono',monospace; font-size:11px;
+  }
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:3px;
+    background:linear-gradient(90deg,var(--trough),var(--crest));
+    border-radius:2px; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:#eaf2ff; border:2px solid var(--crest);
+    cursor:pointer; box-shadow:0 0 8px rgba(95,227,255,0.6);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%;
+    background:#eaf2ff; border:2px solid var(--crest); cursor:pointer;
+  }
+
+  #btnrow, .btnrow{display:flex; gap:8px; margin-top:14px;}
+  button{
+    flex:1;
+    background:rgba(95,227,255,0.08);
+    border:1px solid rgba(95,227,255,0.35);
+    color:#eaf2ff;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; letter-spacing:0.05em; text-transform:uppercase;
+    padding:8px 6px; border-radius:6px; cursor:pointer;
+    transition:background 0.15s, transform 0.1s;
+  }
+  button:hover{background:rgba(95,227,255,0.18);}
+  button:active{transform:scale(0.96);}
+  button.off{opacity:0.5;}
+
+  #legend{
+    position:fixed; bottom:22px; right:22px;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    backdrop-filter:blur(14px);
+    padding:12px 16px;
+    font-size:10.5px; color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;
+    line-height:1.9;
+    z-index:5;
+  }
+  #legend .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px;}
+
+  #hint{
+    position:fixed; top:22px; right:22px;
+    font-size:10.5px; color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;
+    text-align:right; line-height:1.7;
+    z-index:5;
+  }
+</style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<div id="hud">
+  <h1>Double-Slit · Ripple Chamber</h1>
+  <div class="sub" id="hudSub">A single photon at a time is fired at the barrier. Each one lands as one discrete dot — yet over many photons the dots build the same interference fringes as a full wave, because each photon's own probability wave still passes through both slits.</div>
+</div>
+
+<div id="hint">drag to orbit · scroll to zoom</div>
+
+<div id="panel">
+  <div class="row">
+    <div class="label">Frequency <span class="val" id="vFreq">1.00</span></div>
+    <input type="range" id="freq" min="0.5" max="2.2" step="0.01" value="1.0">
+  </div>
+  <div class="row">
+    <div class="label">Amplitude <span class="val" id="vAmp">1.00</span></div>
+    <input type="range" id="amp" min="0.3" max="1.8" step="0.01" value="1.0">
+  </div>
+  <div class="row">
+    <div class="label">Slit Width <span class="val" id="vWidth">3.0</span></div>
+    <input type="range" id="width" min="1" max="8" step="0.5" value="3">
+  </div>
+  <div class="row">
+    <div class="label">Slit Separation <span class="val" id="vSep">16</span></div>
+    <input type="range" id="sep" min="6" max="34" step="1" value="16">
+  </div>
+  <div class="row" id="speedRow">
+    <div class="label">Photon Speed <span class="val" id="vSpeed">0.40</span></div>
+    <input type="range" id="speed" min="0.12" max="2" step="0.01" value="0.4">
+  </div>
+  <div class="btnrow" id="btnrowMode">
+    <button id="btnMode">Mode: Single Photon</button>
+  </div>
+  <div class="btnrow" style="margin-top:8px;">
+    <button id="btnPlay">Pause</button>
+    <button id="btnScreen">Screen: On</button>
+    <button id="btnReset">Reset</button>
+  </div>
+  <div class="sub" id="photonCounter" style="margin-top:11px; letter-spacing:0.04em;">Photons detected: <span class="mono" id="vCount" style="color:var(--crest)">0</span></div>
+</div>
+
+<div id="legend">
+  <div><span class="dot" style="background:var(--crest);box-shadow:0 0 6px var(--crest);"></span>photon / wave crest</div>
+  <div><span class="dot" style="background:var(--trough);box-shadow:0 0 6px var(--trough);"></span>wave trough</div>
+  <div><span class="dot" style="background:#8a93a6;"></span>rigid barrier</div>
+  <div><span class="dot" style="background:var(--amber);box-shadow:0 0 6px var(--amber);"></span>detector hits</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+
+// ---------------------------------------------------------------
+// SIMULATION GRID
+// ---------------------------------------------------------------
+const NX = 160, NY = 96;
+const CELL = 1.0;
+const WALL_THICK = 3;
+const WALL_X = 46;              // grid column where the barrier sits
+const SOURCE_X = 6;              // driven plane-wave column
+const SCREEN_X = NX - 14;        // detector sampling column
+
+let u, uPrev, wallMask, spongeMap, accInt, discreteHits;
+let simTime = 0;
+let running = true;
+let showScreen = true;
+let mode = 'photon';             // 'wave' | 'photon'
+let photonCount = 0;
+
+const params = {
+  freq: 1.0,
+  amp: 1.0,
+  slitWidth: 3,
+  slitSep: 16,
+  speed: 0.4
+};
+
+function idx(i,j){ return j*NX+i; }
+
+function buildFields(){
+  u = new Float32Array(NX*NY);
+  uPrev = new Float32Array(NX*NY);
+  wallMask = new Uint8Array(NX*NY);
+  spongeMap = new Float32Array(NX*NY);
+  accInt = new Float32Array(NY);
+  discreteHits = new Float32Array(NY);
+  photonCount = 0;
+  simTime = 0;
+
+  const cy = NY/2;
+  const half = params.slitSep/2;
+  const hw = params.slitWidth/2;
+  const s1c = cy - half, s2c = cy + half;
+  const s1 = [s1c-hw, s1c+hw];
+  const s2 = [s2c-hw, s2c+hw];
+
+  for(let j=0;j<NY;j++){
+    const inSlit = (j>=s1[0]&&j<=s1[1]) || (j>=s2[0]&&j<=s2[1]);
+    for(let x=0;x<WALL_THICK;x++){
+      const i = WALL_X+x;
+      if(!inSlit) wallMask[idx(i,j)] = 1;
+    }
+  }
+
+  // sponge (absorbing) layer near outer edges, skip left source margin & wall region
+  const EDGE = 14;
+  for(let j=0;j<NY;j++){
+    for(let i=0;i<NX;i++){
+      let d = Math.min(i, NX-1-i, j, NY-1-j);
+      // don't dampen right around the source column itself
+      let s = 0;
+      if(d < EDGE){
+        let t = 1 - d/EDGE;
+        s = t*t*0.045;
+      }
+      spongeMap[idx(i,j)] = s;
+    }
+  }
+  return {s1,s2};
+}
+let slitRanges = buildFields();
+
+const C = 1.0;              // wave speed (grid units / time unit)
+const DT = 0.45;             // timestep (CFL-stable for c*dt/dx <= 0.707)
+const C2 = (C*DT/CELL)*(C*DT/CELL);
+const SUBSTEPS = 2;
+
+function step(){
+  const omega = params.freq * 1.35;
+  simTime += DT;
+
+  const uNext = step._buf || (step._buf = new Float32Array(NX*NY));
+
+  for(let j=1;j<NY-1;j++){
+    const row = j*NX, rowU = (j-1)*NX, rowD = (j+1)*NX;
+    for(let i=1;i<NX-1;i++){
+      const id = row+i;
+      if(wallMask[id]){ uNext[id]=0; continue; }
+      const lap = u[id-1]+u[id+1]+u[rowU+i]+u[rowD+i]-4*u[id];
+      let val = 2*u[id]-uPrev[id]+C2*lap;
+      // sponge damping toward the previous value (absorbs outgoing energy)
+      const sp = spongeMap[id];
+      if(sp>0) val = val - sp*(u[id]-uPrev[id])*4.0;
+      uNext[id] = val;
+    }
+  }
+  // hard zero on outer boundary ring
+  for(let i=0;i<NX;i++){ uNext[i]=0; uNext[(NY-1)*NX+i]=0; }
+  for(let j=0;j<NY;j++){ uNext[j*NX]=0; uNext[j*NX+NX-1]=0; }
+
+  uPrev.set(u);
+  u.set(uNext);
+
+  // drive the plane-wave source as a hard boundary condition, applied AFTER
+  // the field update so it isn't overwritten and stays continuously excited
+  const sVal = params.amp * Math.sin(omega*simTime);
+  const sValPrev = params.amp * Math.sin(omega*(simTime-DT));
+  for(let j=2;j<NY-2;j++){
+    u[idx(SOURCE_X,j)] = sVal;
+    uPrev[idx(SOURCE_X,j)] = sValPrev;
+  }
+
+  // detector accumulation (running average of intensity at screen column)
+  for(let j=0;j<NY;j++){
+    const v = u[idx(SCREEN_X,j)];
+    accInt[j] += (v*v - accInt[j])*0.012;
+  }
+}
+
+// ---------------------------------------------------------------
+// THREE.JS SCENE
+// ---------------------------------------------------------------
+const container = document.getElementById('container');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x070a12, 0.0034);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 2000);
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x070a12,1);
+container.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
+const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+dl.position.set(60,90,40);
+scene.add(dl);
+const dl2 = new THREE.DirectionalLight(0x5fe3ff, 0.25);
+dl2.position.set(-60,40,-60);
+scene.add(dl2);
+
+// ---- floor grid for spatial reference ----
+const grid = new THREE.GridHelper(320, 40, 0x2a3550, 0x161d30);
+grid.position.y = -8;
+scene.add(grid);
+
+// ---- water / wave surface ----
+const waterGeo = new THREE.PlaneGeometry(NX*CELL, NY*CELL, NX-1, NY-1);
+waterGeo.rotateX(-Math.PI/2);
+const colorAttr = new Float32Array(NX*NY*3);
+waterGeo.setAttribute('color', new THREE.BufferAttribute(colorAttr,3));
+const waterMat = new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.DoubleSide, transparent:true, opacity:0.45});
+const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+scene.add(waterMesh);
+
+// PlaneGeometry is already centered at (0,0,0): grid index i=0..NX-1 maps to
+// x = -(NX*CELL)/2 .. +(NX*CELL)/2, matching toWorldX()/toWorldZ() used elsewhere.
+
+function heightColor(h, out, o){
+  const t = Math.max(-1, Math.min(1, h*2.6));
+  if(t>=0){
+    // base -> bright crest
+    out[o]   = 0.04 + t*0.55;
+    out[o+1] = 0.10 + t*0.80;
+    out[o+2] = 0.20 + t*0.75;
+  } else {
+    const a = -t;
+    out[o]   = 0.04 + a*0.42;
+    out[o+1] = 0.02 + a*0.05;
+    out[o+2] = 0.20 + a*0.55;
+  }
+}
+
+function updateWaterMesh(){
+  const pos = waterGeo.attributes.position;
+  const col = waterGeo.attributes.color.array;
+  const HSCALE = 3.4;
+  for(let j=0;j<NY;j++){
+    for(let i=0;i<NX;i++){
+      const vIdx = j*NX+i;
+      const h = u[vIdx];
+      pos.setY(vIdx, h*HSCALE);
+      heightColor(h, col, vIdx*3);
+    }
+  }
+  pos.needsUpdate = true;
+  waterGeo.attributes.color.needsUpdate = true;
+  waterGeo.computeVertexNormals();
+}
+
+// ---- rigid wall (built from the same mask that blocks the sim) ----
+let wallGroup = new THREE.Group();
+scene.add(wallGroup);
+const wallMat = new THREE.MeshStandardMaterial({color:0x8a93a6, roughness:0.45, metalness:0.55, emissive:0x0a0e18});
+const wallEdgeMat = new THREE.MeshStandardMaterial({color:0x3a4560, roughness:0.6, metalness:0.3});
+
+function toWorldX(i){ return (i - NX/2)*CELL; }
+function toWorldZ(j){ return (j - NY/2)*CELL; }
+
+function buildWallGeometry(){
+  while(wallGroup.children.length) wallGroup.remove(wallGroup.children[0]);
+  const {s1,s2} = slitRanges;
+  // solid intervals along j: [0,s1.start] [s1.end,s2.start] [s2.end,NY]
+  const intervals = [];
+  const a0 = 0, a1 = Math.max(0, Math.min(NY, s1[0]));
+  const b0 = Math.min(NY, Math.max(0, s1[1])), b1 = Math.max(0, Math.min(NY, s2[0]));
+  const c0 = Math.min(NY, Math.max(0, s2[1])), c1 = NY;
+  if(a1-a0>0.3) intervals.push([a0,a1]);
+  if(b1-b0>0.3) intervals.push([b0,b1]);
+  if(c1-c0>0.3) intervals.push([c0,c1]);
+
+  const wallCenterX = toWorldX(WALL_X + WALL_THICK/2);
+  const wallWidthX = WALL_THICK*CELL;
+  const wallHeightTotal = 11;
+  const wallYCenter = 1.0;
+
+  intervals.forEach(([start,end])=>{
+    const depth = (end-start)*CELL;
+    if(depth<=0.05) return;
+    const geo = new THREE.BoxGeometry(wallWidthX, wallHeightTotal, depth);
+    const mesh = new THREE.Mesh(geo, wallMat);
+    mesh.position.set(wallCenterX, wallYCenter, toWorldZ((start+end)/2));
+    wallGroup.add(mesh);
+    // thin cap edges to read as "slit opening" edges
+    const edgeGeo = new THREE.BoxGeometry(wallWidthX*1.06, 0.4, 0.4);
+  });
+
+  // subtle glowing rim around each slit gap for readability
+  [[s1[0],s1[1]],[s2[0],s2[1]]].forEach(([g0,g1])=>{
+    const depth = (g1-g0)*CELL;
+    if(depth<=0.05) return;
+    const rimGeo = new THREE.BoxGeometry(wallWidthX*1.02, 0.3, depth);
+    const rimMat = new THREE.MeshBasicMaterial({color:0x5fe3ff, transparent:true, opacity:0.55});
+    const rimTop = new THREE.Mesh(rimGeo, rimMat);
+    rimTop.position.set(wallCenterX, wallYCenter+wallHeightTotal/2+0.05, toWorldZ((g0+g1)/2));
+    wallGroup.add(rimTop);
+    const rimBot = rimTop.clone();
+    rimBot.position.y = wallYCenter-wallHeightTotal/2-0.05;
+    wallGroup.add(rimBot);
+  });
+}
+buildWallGeometry();
+
+// ---- source indicator ----
+const sourceGeo = new THREE.BoxGeometry(0.6, 9, NY*CELL*0.9);
+const sourceMat = new THREE.MeshBasicMaterial({color:0xffb020, transparent:true, opacity:0.16});
+const sourceMesh = new THREE.Mesh(sourceGeo, sourceMat);
+sourceMesh.position.set(toWorldX(SOURCE_X), 1, 0);
+scene.add(sourceMesh);
+
+// ---- detector screen indicator plane (thin, where we sample) ----
+const screenIndGeo = new THREE.PlaneGeometry(0.05, NY*CELL);
+const screenIndMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.08, side:THREE.DoubleSide});
+const screenInd = new THREE.Mesh(screenIndGeo, screenIndMat);
+screenInd.rotation.y = Math.PI/2;
+screenInd.position.set(toWorldX(SCREEN_X), 1, 0);
+scene.add(screenInd);
+
+// ---- accumulated intensity bar-chart detector, offset beyond the tank ----
+const barGroup = new THREE.Group();
+scene.add(barGroup);
+const BAR_X = toWorldX(NX) + 22;
+const BAR_COUNT = NY;
+const barGeo = new THREE.BoxGeometry(1.6, 1, CELL*0.82);
+const barMat = new THREE.MeshStandardMaterial({color:0xffb020, emissive:0x5a3200, emissiveIntensity:0.9, roughness:0.4, metalness:0.2});
+const barMesh = new THREE.InstancedMesh(barGeo, barMat, BAR_COUNT);
+scene.add(barMesh);
+barMesh.position.x = 0; // set per-instance
+const dummy = new THREE.Object3D();
+
+// backing panel for the detector screen
+const backPanelGeo = new THREE.PlaneGeometry(NY*CELL+4, 26);
+const backPanelMat = new THREE.MeshStandardMaterial({color:0x0c1120, roughness:0.9, metalness:0.1, side:THREE.DoubleSide});
+const backPanel = new THREE.Mesh(backPanelGeo, backPanelMat);
+backPanel.rotation.y = Math.PI/2;
+backPanel.position.set(BAR_X+1, 5, 0);
+scene.add(backPanel);
+
+function updateBars(){
+  if(mode==='wave'){
+    const BAR_SCALE = 210;
+    for(let j=0;j<NY;j++){
+      const h = Math.max(0.06, accInt[j]*BAR_SCALE);
+      dummy.position.set(BAR_X, h/2 - 8, toWorldZ(j));
+      dummy.scale.set(1,h,1);
+      dummy.updateMatrix();
+      barMesh.setMatrixAt(j, dummy.matrix);
+    }
+  } else {
+    const HIT_SCALE = 0.62;
+    for(let j=0;j<NY;j++){
+      const h = Math.max(0.06, discreteHits[j]*HIT_SCALE);
+      dummy.position.set(BAR_X, h/2 - 8, toWorldZ(j));
+      dummy.scale.set(1,h,1);
+      dummy.updateMatrix();
+      barMesh.setMatrixAt(j, dummy.matrix);
+    }
+  }
+  barMesh.instanceMatrix.needsUpdate = true;
+}
+barMesh.visible = showScreen;
+backPanel.visible = showScreen;
+
+// ---------------------------------------------------------------
+// SINGLE-PHOTON FLIGHT SYSTEM
+// ---------------------------------------------------------------
+const DETECT_X = BAR_X - 2.5;
+let spawnTimer = 0;
+let activePhotons = [];   // {t, duration, p0,p1,p2, mesh}
+let flashes = [];         // {t, mesh}
+const vCountEl = document.getElementById('vCount');
+
+const photonGeo = new THREE.SphereGeometry(0.85, 16, 16);
+const photonMat = new THREE.MeshBasicMaterial({color:0xeafcff});
+const glowGeo = new THREE.SphereGeometry(1.9, 12, 12);
+const glowMat = new THREE.MeshBasicMaterial({color:0x5fe3ff, transparent:true, opacity:0.28});
+
+const flashGeo = new THREE.CircleGeometry(1, 20);
+const flashMatTemplate = {color:0xffe9b0, transparent:true, opacity:0.9, side:THREE.DoubleSide};
+
+function sampleRowFromIntensity(){
+  let total = 0;
+  for(let j=0;j<NY;j++) total += Math.max(0, accInt[j]);
+  if(total < 1e-8) return Math.floor(NY/2);
+  let r = Math.random()*total;
+  let acc = 0;
+  for(let j=0;j<NY;j++){
+    acc += Math.max(0, accInt[j]);
+    if(acc >= r) return j;
+  }
+  return NY-1;
+}
+
+function spawnPhoton(){
+  const targetRow = sampleRowFromIntensity();
+  const {s1,s2} = slitRanges;
+  const useSlit1 = Math.random() < 0.5;
+  const slitCenterJ = useSlit1 ? (s1[0]+s1[1])/2 : (s2[0]+s2[1])/2;
+
+  const p0 = new THREE.Vector3(toWorldX(SOURCE_X), 2.6, 0);
+  const p1 = new THREE.Vector3(toWorldX(WALL_X+WALL_THICK/2), 2.6, toWorldZ(slitCenterJ));
+  const p2 = new THREE.Vector3(DETECT_X, 2.6, toWorldZ(targetRow));
+
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(photonGeo, photonMat);
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  group.add(glow); group.add(core);
+  group.position.copy(p0);
+  scene.add(group);
+
+  const baseDuration = 4.2;
+  const duration = baseDuration / Math.max(0.08, params.speed);
+
+  activePhotons.push({t:0, duration, p0, p1, p2, mesh:group, targetRow});
+}
+
+function spawnFlash(targetRow){
+  const mat = new THREE.MeshBasicMaterial(flashMatTemplate);
+  const mesh = new THREE.Mesh(flashGeo, mat);
+  mesh.position.set(DETECT_X+0.3, 2.6, toWorldZ(targetRow));
+  mesh.rotation.y = Math.PI/2;
+  mesh.scale.set(0.3,0.3,0.3);
+  scene.add(mesh);
+  flashes.push({t:0, mesh});
+}
+
+function updatePhotons(dt){
+  spawnTimer += dt;
+  const baseInterval = 1.05;
+  const interval = baseInterval / Math.max(0.08, params.speed);
+  if(spawnTimer >= interval){
+    spawnTimer = 0;
+    spawnPhoton();
+  }
+
+  for(let k=activePhotons.length-1;k>=0;k--){
+    const ph = activePhotons[k];
+    ph.t += dt/ph.duration;
+    if(ph.t >= 1){
+      ph.mesh.position.copy(ph.p2);
+      scene.remove(ph.mesh);
+      discreteHits[ph.targetRow] += 1;
+      photonCount++;
+      vCountEl.textContent = photonCount;
+      spawnFlash(ph.targetRow);
+      activePhotons.splice(k,1);
+      continue;
+    }
+    const tt = ph.t;
+    const a = (1-tt)*(1-tt), b = 2*(1-tt)*tt, c = tt*tt;
+    ph.mesh.position.set(
+      a*ph.p0.x + b*ph.p1.x + c*ph.p2.x,
+      a*ph.p0.y + b*ph.p1.y + c*ph.p2.y,
+      a*ph.p0.z + b*ph.p1.z + c*ph.p2.z
+    );
+  }
+
+  for(let k=flashes.length-1;k>=0;k--){
+    const f = flashes[k];
+    f.t += dt;
+    const p = Math.min(1, f.t/0.5);
+    const s = 0.3 + p*1.6;
+    f.mesh.scale.set(s,s,s);
+    f.mesh.material.opacity = 0.9*(1-p);
+    if(p>=1){
+      scene.remove(f.mesh);
+      f.mesh.material.dispose();
+      flashes.splice(k,1);
+    }
+  }
+}
+
+function clearPhotons(){
+  activePhotons.forEach(ph=>scene.remove(ph.mesh));
+  activePhotons = [];
+  flashes.forEach(f=>{scene.remove(f.mesh); f.mesh.material.dispose();});
+  flashes = [];
+  spawnTimer = 0;
+}
+
+// ---------------------------------------------------------------
+// CUSTOM ORBIT CAMERA
+// ---------------------------------------------------------------
+let camTarget = new THREE.Vector3(10,0,0);
+let radius = 165, theta = 0.95, phi = 1.02;
+function updateCamera(){
+  camera.position.x = camTarget.x + radius*Math.sin(phi)*Math.sin(theta);
+  camera.position.y = camTarget.y + radius*Math.cos(phi);
+  camera.position.z = camTarget.z + radius*Math.sin(phi)*Math.cos(theta);
+  camera.lookAt(camTarget);
+}
+updateCamera();
+
+let dragging=false, lastX=0, lastY=0;
+renderer.domElement.addEventListener('pointerdown', e=>{dragging=true; lastX=e.clientX; lastY=e.clientY;});
+window.addEventListener('pointerup', ()=>dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  theta -= dx*0.006;
+  phi -= dy*0.006;
+  phi = Math.max(0.25, Math.min(Math.PI-0.25, phi));
+  updateCamera();
+});
+renderer.domElement.addEventListener('wheel', e=>{
+  e.preventDefault();
+  radius *= (1 + e.deltaY*0.001);
+  radius = Math.max(50, Math.min(420, radius));
+  updateCamera();
+}, {passive:false});
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------------------------------------------------------------
+// UI WIRING
+// ---------------------------------------------------------------
+const freqEl=document.getElementById('freq'), vFreq=document.getElementById('vFreq');
+const ampEl=document.getElementById('amp'), vAmp=document.getElementById('vAmp');
+const widthEl=document.getElementById('width'), vWidth=document.getElementById('vWidth');
+const sepEl=document.getElementById('sep'), vSep=document.getElementById('vSep');
+const speedEl=document.getElementById('speed'), vSpeed=document.getElementById('vSpeed');
+const btnPlay=document.getElementById('btnPlay');
+const btnScreen=document.getElementById('btnScreen');
+const btnReset=document.getElementById('btnReset');
+const btnMode=document.getElementById('btnMode');
+const speedRow=document.getElementById('speedRow');
+
+function applyMode(){
+  waterMat.opacity = mode==='photon' ? 0.42 : 0.95;
+  speedRow.style.opacity = mode==='photon' ? '1' : '0.35';
+  btnMode.textContent = 'Mode: ' + (mode==='photon' ? 'Single Photon' : 'Continuous Wave');
+}
+applyMode();
+
+function resetSim(){
+  slitRanges = buildFields();
+  buildWallGeometry();
+  clearPhotons();
+  vCountEl.textContent = '0';
+}
+
+freqEl.addEventListener('input', ()=>{ params.freq=parseFloat(freqEl.value); vFreq.textContent=params.freq.toFixed(2); });
+ampEl.addEventListener('input', ()=>{ params.amp=parseFloat(ampEl.value); vAmp.textContent=params.amp.toFixed(2); });
+widthEl.addEventListener('input', ()=>{ params.slitWidth=parseFloat(widthEl.value); vWidth.textContent=params.slitWidth.toFixed(1); resetSim(); });
+sepEl.addEventListener('input', ()=>{ params.slitSep=parseFloat(sepEl.value); vSep.textContent=params.slitSep.toFixed(0); resetSim(); });
+speedEl.addEventListener('input', ()=>{ params.speed=parseFloat(speedEl.value); vSpeed.textContent=params.speed.toFixed(2); });
+
+btnMode.addEventListener('click', ()=>{
+  mode = mode==='photon' ? 'wave' : 'photon';
+  clearPhotons();
+  applyMode();
+});
+
+btnPlay.addEventListener('click', ()=>{
+  running = !running;
+  btnPlay.textContent = running ? 'Pause' : 'Play';
+  btnPlay.classList.toggle('off', !running);
+});
+btnScreen.addEventListener('click', ()=>{
+  showScreen = !showScreen;
+  barMesh.visible = showScreen;
+  backPanel.visible = showScreen;
+  btnScreen.textContent = 'Screen: ' + (showScreen?'On':'Off');
+  btnScreen.classList.toggle('off', !showScreen);
+});
+btnReset.addEventListener('click', resetSim);
+
+// ---------------------------------------------------------------
+// MAIN LOOP
+// ---------------------------------------------------------------
+let lastFrameTime = performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now-lastFrameTime)/1000);
+  lastFrameTime = now;
+
+  if(running){
+    for(let s=0;s<SUBSTEPS;s++) step();
+    updateWaterMesh();
+    if(mode==='photon') updatePhotons(dt);
+    updateBars();
+  }
+  renderer.render(scene, camera);
+}
+animate();
+
+})();
+</script>
+</body>
+</html>
